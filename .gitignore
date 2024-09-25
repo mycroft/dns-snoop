@@ -1,0 +1,5 @@
+vmlinux.h
+bpf_bpfel.*
+bpf_bpfeb.*
+dns-snoop
+.vscode
