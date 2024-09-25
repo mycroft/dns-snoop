@@ -20,6 +20,23 @@ import (
 
 //go:generate go run github.com/cilium/ebpf/cmd/bpf2go -tags linux -type event -cc clang -cflags "-O2 -g -Wall -Werror" bpf dns_snoop_kern.c -- -I../headers
 
+// NetToHostShort converts a 16-bit integer from network to host byte order, aka "ntohs"
+func NetToHostShort(i uint16) uint16 {
+	data := make([]byte, 2)
+	binary.BigEndian.PutUint16(data, i)
+	return binary.LittleEndian.Uint16(data)
+}
+
+func ipv6ArrayToString(ipv6Array [16]byte) string {
+	ip := net.IP(ipv6Array[:])
+	return ip.String()
+}
+
+func ipv4ArrayToString(ipv4Array [4]byte) string {
+	ip := net.IP(ipv4Array[:])
+	return ip.String()
+}
+
 func main() {
 	ifaceName := "lo"
 
@@ -115,7 +132,19 @@ func main() {
 			kind = "Response"
 		}
 
-		fmt.Printf("=== %s ===\n", kind)
+		src := "n/a"
+		dst := "n/a"
+
+		switch NetToHostShort(event.Protocol) {
+		case syscall.ETH_P_IP:
+			src = ipv4ArrayToString(event.V4S_addr)
+			dst = ipv4ArrayToString(event.V4D_addr)
+		case syscall.ETH_P_IPV6:
+			src = ipv6ArrayToString(event.V6S_addr)
+			dst = ipv6ArrayToString(event.V6D_addr)
+		}
+
+		fmt.Printf("=== %s (%s -> %s) ===\n", kind, src, dst)
 		fmt.Println(msg)
 	}
 }

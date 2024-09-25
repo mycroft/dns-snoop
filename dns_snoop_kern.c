@@ -23,8 +23,15 @@ typedef unsigned long int u64;
 char __license[] SEC("license") = "Dual MIT/GPL";
 
 struct event {
+    u16 protocol;
     u16 len;
     u8 payload[DNS_MAX_SIZE];
+
+    u8 v6_s_addr[16];
+    u8 v6_d_addr[16];
+
+    u8 v4_s_addr[4];
+    u8 v4_d_addr[4];
 };
 
 struct {
@@ -53,7 +60,6 @@ int tc_dns_snoop(struct __sk_buff *ctx) {
 
     struct iphdr *ip;
     struct ipv6hdr *ip6;
-
     struct udphdr *udp;
 
     struct ethhdr *eth = data;
@@ -94,7 +100,6 @@ int tc_dns_snoop(struct __sk_buff *ctx) {
             break;
     }
 
-    // uudp
     payload = (void *)(udp + 1);
 
     if (payload > data_end || (bpf_ntohs(udp->dest) != DNS_PORT && bpf_ntohs(udp->source) != DNS_PORT)) {
@@ -104,6 +109,36 @@ int tc_dns_snoop(struct __sk_buff *ctx) {
     e = bpf_ringbuf_reserve(&events, sizeof(struct event), 0);
     if (!e) {
         return TC_ACT_OK;
+    }
+
+    e->protocol = eth->h_proto;
+    switch (e->protocol) {
+        case bpf_htons(ETH_P_IP):
+            bpf_probe_read_kernel(
+                e->v4_s_addr,
+                sizeof(e->v4_s_addr),
+                ((unsigned char*)(eth + 1)) + offsetof(struct iphdr, saddr)
+            );
+
+            bpf_probe_read_kernel(
+                e->v4_d_addr,
+                sizeof(e->v4_d_addr),
+                ((unsigned char*)(eth + 1)) + offsetof(struct iphdr, daddr)
+            );
+
+            break;
+        case bpf_htons(ETH_P_IPV6):
+            bpf_probe_read_kernel(
+                e->v6_s_addr,
+                sizeof(e->v6_s_addr),
+                ((unsigned char*)(eth + 1)) + offsetof(struct ipv6hdr, saddr)
+            );
+            bpf_probe_read_kernel(
+                e->v6_d_addr,
+                sizeof(e->v6_d_addr),
+                ((unsigned char*)(eth + 1)) + offsetof(struct ipv6hdr, daddr)
+            );
+            break;
     }
 
     e->len = bpf_ntohs(udp->len);
