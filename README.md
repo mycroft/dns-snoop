@@ -2,6 +2,8 @@
 
 POC that listens for ingress/egress interface using eBPF, and dump found DNS queries and responses.
 
+This tool only handles DNS queries detected on port 53 (which makes it a bit useless nowadays to be honest). It also support short TCP queries/responses (as long as they fit in a single packet).
+
 ## Build & run
 
 ```sh
